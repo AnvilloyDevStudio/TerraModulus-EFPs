@@ -1,0 +1,1319 @@
+<?xml version="1.1" encoding="UTF-8" ?>
+<efp xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../efp.xsd"
+     efp="3" created="2025-01-30" category="informational" status="draft" title="Relictus Review Report">
+	<metadata>
+		<pullRequests>
+			<pullRequest id="4"/>
+		</pullRequests>
+	</metadata>
+	<body>
+		<section title="Introduction">
+			<content>
+				In EFP 2, a plan to review TerraModulus Relictus branch has been made. This EFP describes
+				about the report of the entire review process.
+			</content>
+		</section>
+		<section title="Code Quality">
+			<content>
+				<p>
+					Source code is generally reviewed in the following order:
+					<list type="decimal">
+						<li>core</li>
+						<li>core.io</li>
+						<li>network</li>
+						<li>gfx</li>
+						<li>screen</li>
+						<li>entity</li>
+						<li>item</li>
+						<li>level.tile</li>
+						<li>level</li>
+						<li>saveload</li>
+						<li>util</li>
+					</list>
+					However, some classes may be reviewed earlier or later.
+				</p>
+				<p>
+					The review has made as of commit <code>64c8abbcd33edb1046abee40d8e712b546c1b47d</code>.
+					In the following, various content would be discussed.
+				</p>
+			</content>
+			<section title="Basic Code Structures">
+				<content>
+					<p>
+						<code>Action</code> in Kotlin could be instead a typealias of function type
+						<code>() -> Unit</code>, and declared in utils. It is the similar as
+						<code>Condition</code>, which could instead be <code>() -> Boolean</code>
+						or a functional interface with advanced features. However,
+						<code>MonoCondition</code> could be replaced by <code>Predicate</code>.
+					</p>
+					<p>
+						For <code>Game</code>, several things are noticeable. Firstly, it should be
+						an instance, not completely static members or as a singleton. The class name
+						would be <code>TerraModulus</code>. The <code>NAME</code> field would be a
+						top level constant. The field <code>VERSION</code> will later be handled
+						by the application profile, so it would be loaded in early runtime of the
+						application, and accessible later by a getter. <code>Initializer</code>
+						would be handled in <code>Main.kt</code> file, which would also include
+						all the initializations of all other main threads, including rendering
+						and ticking threads.
+					</p>
+					<p>
+						The similar things are applicable on <code>Initializer</code>, that there
+						should be no static members. The window frame would be handled with a window
+						handler, which may also handle the windows for some error popups. FPS and TPS
+						counter would be handled respectively in their handler classes, with which threads
+						taken into account. Argument parsing would be handled in the <code>Main.kt</code>
+						file. The <code>run</code> function would be in the <code>TerraModulus</code>
+						class. The function <code>getExceptionTrace</code> may somehow be reused for
+						error information displaying or crash reports.
+					</p>
+					<p>
+						The <code>ClipboardHandler</code> should be handled by <code>InputHandler</code>.
+						Since the input interactions, including keyboard and mouse, would be handled by
+						GLFW, the interfaces would not have to be implemented. This includes key inputs.
+						The menu structure would also be changed, so key inputs would only be listened
+						by the desired menus elements with some priorities.
+					</p>
+					<p>
+						The <code>InputHandler</code> manages quite a lot of things, input processing,
+						key mapping, controller states, key state processing. Controller management should
+						be separated, say like <code>ControllerManager</code>. The functionalities provided
+						by the gamepad library is quite poor. The abstract <code>Key</code> class and its
+						subclasses are quite useful. In fact, repeating keys would no longer be necessary,
+						so <code>PhysicalKey</code> would be simplified and <code>ControllerKey</code> would
+						not be needed. Then, there could be functions on <code>Key</code>, that "or" and
+						"and" could be used. String expressions are no longer needed. What is
+						<code>PhysicalKey#stayDown</code>? Probably ignorable. However, if the functions
+						return single <code>Key</code> state after processing, there is no really need to
+						have subclasses <code>CompoundedKey</code> and <code>ORKey</code>. While returning
+						the key state from the mapping, the states are proceeded according to the setting
+						before returning. Key mapping would not use the <code>Key</code> but another class.
+					</p>
+					<p>
+						There should be 4 classes, <code>KeyInputHandler</code>,
+						<code>TextInputHandler</code>, <code>GamepadInputHandler</code> and
+						<code>MouseInputHandler</code>, over single <code>InputHandler</code>. Among them,
+						<code>TextInputHandler</code> handles also clipboard. Text input queues would be
+						proceeded only when a request to accept text inputs is sent and reset before each
+						tick. A regex filter could be used, and the backspace keys would also be proceeded
+						in the same way. The <code>releaseAll</code> method is ignored. Key hints are quite
+						troublesome, but most probably it would be handled in the similar way. Modifiers
+						would not be handled separately in the handler class. Controller vibration feedback
+						would be handled by <code>ControllerManager</code> or another class instead, but
+						controller detection and management are certainly handled by the manager class.
+					</p>
+					<p>
+						<code>SaveManager</code> or a similar class would handle what the upper part of
+						what <code>FileHandler</code> used to handle. For other file helper functions for
+						folder deletion and copying, they are already handled in Kotlin by
+						<code>Path.deleteRecursively</code> and <code>File.copyRecursively</code>
+						respectively. There is no need to list assets with the filesystem when we would
+						have an advanced asset system implemented in the future.
+					</p>
+					<p>
+						<code>io</code> would not be in <code>core</code>, and it is too generic. At least,
+						<code>audio</code> and <code>Localization</code> would be separated from it. All
+						display elements would become registered to the menu, so simply a reload traversing
+						all the elements would be enough, without any "hook".
+					</p>
+					<p>
+						The debug locale is not quite useful in fact. When there are already the logs of
+						untranslated strings and careful programming, there is completely no need to display
+						the translation keys on the screen. Locales would be defined in assets. Further
+						detailed implementation would depend on the new asset system. The main purpose of
+						the "debug" locale is to display the parts that should use translation keys but
+						have not, though this ability could be changed into a hotkey highlighting untranslated
+						components on the UI. All the entries would have already been loaded into memory,
+						so there would not actually be "loading" when switching language.
+					</p>
+					<p>
+						<code>Settings</code> would become <code>Preferences</code>, but not using the UI
+						entries as the entries, which is quite a bad idea. The settings values should be
+						independent on the UI components, but instead the UI components would be made with
+						linkages with these setting values. World generation options would only exist in the
+						world generation options but not here as global entries. All the settings would be
+						made with type specified property entries.
+					</p>
+					<p>
+						No class would extend the major game class <code>TerraModulus</code>. The
+						<code>RenderSystem</code> would only handle the top operations. UI components would
+						be handled in another manager, like <code>UIManager</code> or <code>MenuManager</code>.
+						The sprite management would be merged into the registry system. Everything would be
+						enhanceable by hardware accelerations, so the rendering system would highly depend on
+						the native libraries and the APIs, especially physics. Detailed implementation of
+						graphics and physics would be discussed later. The major render system would manage
+						the states of the world renderer, so the systems of UI and world graphics are
+						separated. This way, several fields would be separated. Also, the window size
+						would not be fixed, and there would not be something called the canvas "scale",
+						but there would be UI "scale", which is a simple multiple of the base dimensions,
+						available for setting depending on the window size (not saved). The entire render
+						system would be backed by the rendering engine.
+					</p>
+					<p>
+						The canvas would be fully filled. The several UI elements like the app status bar
+						and HUD elements (e.g. hot bar, boss bar, debug screen) would become menu components.
+						Level rendering would be a part of world rendering, which includes world background
+						and sky rendering. Toasts are usable, but not the notification text directly on
+						screen. All notifications would be replaced by chat (in game for world events) or
+						toasts (any client event in game).
+					</p>
+					<p>
+						In-game TPS would be 20 instead if 60. The length of a day would become 20 minutes
+						instead of 18 so that it could be a reasonably long time and a multiple of 60, as
+						the number of minutes in an hour. The game speed should be constant for several
+						performance considerations, so it should not be paused. Several fields would be
+						available for several values:
+						<list>
+							<li>
+								<code>dayTime</code>: total time (number of ticks) elapsed for the game day
+							</li>
+							<li><code>dayCount</code>: number of days elapsed in world during gameplay</li>
+							<li>
+								<code>gameTime</code>: total time (number of ticks) played (elapsed) in
+								world during gameplay
+							</li>
+						</list>
+						Fullscreen and screenshots would be handled instead by the render system. The
+						toasts would have their own lifetime. There might be a backup routine however,
+						to replace auto saving, which requires full pause of the gameplay ticking for
+						game data synchronization across each part, but not allowed to pause the game
+						due to the above restriction.
+					</p>
+					<p>
+						Ticking would be handled in the <code>TerraModulus</code> class. In fact, menu
+						ticking should be done there, so <code>MenuManager</code> should be outside the
+						<code>RenderSystem</code>, but rendering takes it as a parameter. World ticking
+						is handled by the respective manager. Audio main process would be in a separate
+						thread managed by the audio system. <code>Display</code> would be renamed to
+						<code>Screen</code> for clarity. There would be no the original class of
+						<code>Screen</code>, but probably just a <code>Canvas</code>. The screens would
+						still be using the Last-In-First-Out (LIFO) linked list, but the way to handle
+						screen initialization and exiting could be improved, may be by a reference to
+						the constructor instead of the initializing function, especially the function's
+						parameter for the parent instance acts only for rendering. This case, having a
+						constructor function passed and parent screens handled in the menu manager would
+						seemingly be better.
+					</p>
+					<p>
+						The usages of toasts are not in the same level. <code>AppToast</code> is a subclass
+						of <code>Toast</code>, but it is used in the same level as the superclass by the
+						fields. They should either be separate classes or subclasses, or even in the same
+						system. It depends on actually how they would be implemented. The behaviors of the
+						toasts may be different by this, so it could not be said in simple words just now.
+					</p>
+					<p>
+						For this kind of event handling, like the controller port events, should be instead
+						handled by listener callbacks but not pulling events each tick. This kind of event
+						is expected to be separated and not frequent, and listener callbacks would be
+						sufficient. Also, the response of the events is also simply just state updating.
+						In fact, the event by GLFW would include the target controller, so no extra
+						searching is even needed. Anyway, <code>GamepadInputHandler</code> would probably
+						be ticked only when controllers are enabled.
+					</p>
+					<p>
+						Ticking of player entity should be entirely independent of UI ticking. The entity
+						<i>is</i> a world object, but UI is a client side-only system. This is probably
+						because menu interactions are handled in the entity ticking function, but it is
+						not practical. Such parts should instead be handled by the <code>MenuManager</code>
+						class or a similar class. This could also ensure class isolation and responsibility.
+					</p>
+					<p>
+						<code>World</code> would be instantiated and not a part of <code>core</code>.
+						Also, levels would be managed by the world instances instead of being handled
+						by other unrelated classes. Many several configurations and behaviors would not be
+						hardcoded within program code, but with the assets, including the dimensions. Also,
+						the world configurations like the seed and world name would be stored in an object.
+					</p>
+					<p>
+						All world-related randoms would belong to instances. These instances may also be
+						replaced by the backend engine if necessary. Also, The fields for the level change
+						listener, last world enter and exit time are not quite practical. The actual
+						realization of dimension change would depend on the actual implementation, but not
+						likely with a listener not implemented to do anything. Moreover, there is no need
+						to compare and check the time when they could just be the initialization and
+						termination, which could be handled by instantiations and instance destroys.
+						Still, resetting sprite animations by this may not be a good way, but sprite
+						animations should be handled in another way. Having instances would still be
+						simpler than having the function of <code>resetGame</code>. Also, the logic
+						is also problematic when both <code>Player#respawn</code> and
+						<code>Level#add</code> are in the same block, so obviously the code should be
+						more semantic, straightforward and logical. <code>WorldSettings</code> matches
+						the logic, but the entire code is still not, unfortunately.
+					</p>
+					<p>
+						There should be a better way to handle world loading. For example, loading assets
+						would have a progress bar, so as loading world. There would be loading sessions
+						specified when starting the progress. Resource loading logic is outside the menus,
+						so the loading code does not need to be inside the menus, but the loading menu.
+						The loading screen is instantiated with the loading session, then the progress
+						would then be updated and refreshed during the loading progress. There is no really
+						need for the logger with the world name as it is already clear with just the
+						reorganized class structures. Resetting world before initialization would not be
+						needed if it is instantiated; when the world is loaded, the reset values would be
+						even not used.
+					</p>
+					<p>
+						The exceptions used in world loading are quite reasonable. It is clear that when
+						these rare exceptions occur, the entire operation must be interrupted or cancelled.
+						This example is quite practical, despite the unorganized class structures.
+					</p>
+					<p>
+						The default uncaught exception handler should be set as early as possible. Then, when
+						there is any uncaught exception, they could be handled well, and users could be
+						informed properly. A lambda would be used instead of simply referring to a function.
+						The content would be unique to distinguish from other caught errors or exceptions.
+					</p>
+					<p>
+						Somehow illogical that the canvas instance is passed to construct the input handler.
+						Anyway, resources or assets would not be loaded that early, but packs would be loaded
+						at the same time as vanilla assets. However, probably only the loading screen, with
+						probably a splash screen would be the hardcoded asset image embedded into the
+						application. There would be a progress bar to initialize full loading of all parts
+						after the appearance of the splash screen with a logo, like Minecraft's one, simple
+						and neat but symbolic. Maybe there could be customized splash screen inserted after
+						initialization just before the title screen or pre-, during or post-world loading.
+						As for when to initialize tiles, entities and items, still a question, since it
+						depends on how they are defined with registries later. For the title screen, it
+						would be set only after the initialization, so the necessary resources would be
+						ready first. Users would have their client IDs, but detailed implementation would
+						be decided later. If it is set to fullscreen on start, the window would be set to
+						fullscreen when initialized, not that separated.
+					</p>
+					<p>
+						The entire save and load system would be separate, not simply just <code>Save</code>
+						and <code>Load</code>. Every part is isolated, so as the timings, systems, and
+						responsibilities of them. Preferences would be handled alone, without associated
+						with other saves.
+					</p>
+					<p>
+						For server, the entire system would have to be planned. This includes serialization,
+						routing and network communication. However, activities would have some treatments to
+						prevent non-synchronization and data loss. There would be no really difference in
+						implementation between single player and multiplayer for consistency and
+						compatibility, especially in the server side or the server-client relationship.
+						Actually, it may work like using numeric ID to identify the transmission data, but
+						the protocol would neither be forward- nor backward-compatible.
+					</p>
+					<p>
+						When there is a server, analytics could be done. It includes counting active clients
+						by the Launcher activities and the pings like in Minicraft+. Note that this is not
+						telemetry, which collects even device information and usage reports. However, these
+						data could still be collected <i>only when the user agrees</i>. Even the user decided
+						to agree or not during the first launch (identified by local save data) of the
+						application, the user could still toggle it in preferences. Both of these are
+						optional, and there would be the corresponding terms made. Counting would be done
+						on the server since it is just the database record, but pings would be kept
+						anonymous. Both telemetry and automatic crash report transfers may not be anonymous,
+						and some device information or account identifier would be included in the
+						transmissions. Detailed implementation would be discussed later, but it is certainly
+						something.
+					</p>
+					<p>
+						Colors, there is entirely no need to care about old-formatted color values. However,
+						it could just use the similar functions, but there could be more colors, using less
+						the tint function, or probably using other utility functions. For formatting codes,
+						they would not be handled in <code>Color</code>, but another class handling display
+						strings or whatever fits. In fact this kind of format may exist control characters
+						that normally could not be typed, so they could not be used properly. The
+						<code>limit</code> function is just the <code>clamp</code> function, repeated. The
+						tinting functions and most other functions would likely be removed, but the lightness
+						calculation could be reused, in somewhere.
+					</p>
+					<p>
+						<code>Dimension</code>, <code>Insets</code>, <code>Point</code> and
+						<code>Rectangle</code> could be made into value classes, in which the fields should
+						be immutable. Likely these classes related to graphics would be hidden into the
+						graphics module, which would be only used by client side. There could be more
+						functions to transform, operate or interact with these value classes. Also, Insets
+						may not be really needed when there is <code>Dimension</code>, but probably the
+						functions could be directly added to <code>Rectangle</code>.
+					</p>
+					<p>
+						If guessed correctly, <code>Ellipsis</code> is probably just the dotting animation.
+						This style is mostly not used, since it is more tended to show more details and be
+						more intuitive. Mostly, spinners, progress bars or more fancy animations are used
+						nowadays. Ellipsis would not be used in the future. <code>SequentialEllipsis</code>
+						seems to be moving a single dot per period; <code>SmoothEllipsis</code> seems to be
+						looping dots like a loading progress bar without progress. The <code>DotUpdater</code>
+						updating methods seem to be various but really unnecessary, it is still lacking
+						information.
+					</p>
+					<p>
+						The <code>Font</code> class would be made into a single package but most likely just
+						hidden within the graphics module. The <code>chars</code> would be fully configurable
+						later by assets pack. Several drawing mode of text would be available, like plain,
+						formatted, hard-/pre-formatted (styled). When drawing, an optional configuration
+						object like the <code>FontStyle</code> could be passed as an argument, for background
+						and foreground colors, and the rendering bounds? Actually for bounds, horizontal
+						scrolling may be disused, but perhaps only the vertical values are useless. The
+						ability to scroll entries horizontally would eventually not be implemented, but for
+						displaying scrolling text only. Still, all the drawing modes could be combined to
+						just set whether to enable formatting codes as the configuration attributes, since
+						when nothing is set, it is fully plain; when something is set, it could be styled.
+						The "redo" code may still be too complex in the system, so the stack class would not
+						be needed. Width calculation, maybe using advanced looping, since invalid codes
+						would not be used in formatting; probably display component architecture would be
+						used to prevent this. Drawing centered may not be used anymore; drawing paragraphs
+						would be quite advanced, so it would be higher level. For drawing styles, there
+						could be paragraph alignment and shadows, but the current implementation of
+						<code>FontStyle</code> is quite poor, and it could be replaced by using UI
+						components.
+					</p>
+					<p>
+						Texture atlas could be implemented, especially when the engine is lower level, since
+						it could improve memory efficiency for a mass number of sprites. All the textures
+						would use the same set of atlases, in which a new one would be created only when
+						the existing one(s) is/are full. However, a difficulty is that not all the sprites
+						would be squares or even squares with the sides of powers of 2, a good algorithm
+						would be required. A reference could be taken from
+						<a href="https://www.david-colson.com/2020/03/10/exploring-rect-packing.html">
+							this article
+						</a>. Note that they would be mostly rectangles or squares, and all textures from
+						all the assets packs would be loaded. <code>MinicraftImage</code> is just an
+						alternative of the existing image classes with just a simpler class structure, but
+						may not be used.
+					</p>
+					<p>
+						Darkness rendering would be advanced based on light sources and light level values
+						saved in the chunk data. Rendering lightness would depend on the gamma value set.
+						Mirroring settings could just be 2 separate boolean values, but sprite transforming
+						would be realized in another way, probably by filtering function or something.
+						Anyway, the canvas would just handle the rendering results by the graphics elements
+						from both the UI and the world. When it comes to the rendering engine, internally
+						buffer arrays would be used. The rendering queues is quite a good idea compared to
+						the idea in the past, it was used for rendering optimization. However, the optimization
+						strategy by checking the clearing request is not that ideal in the system, since it
+						could be an overhead. A better way is in fact to skip rendering when there is some
+						places are intended to be hidden when it is in the rendering functions, but not by
+						the processing functions of rendering requests. The responsibilities should be definite
+						in fact. There would not be an overlay canvas just for rendering lights, but all the
+						rendering would be done with just one canvas handled by the rendering engine for
+						compositing all the graphics elements in one. The current way in <code>Screen</code>
+						is actually more like a workaround to optimize graphics rendering, though not the
+						best or the most practical in the industry. Among the rendering classes, only the
+						sprite rendering and inverted color line rendering ones have not taken the advantages
+						of <code>Graphics2D</code>, which could be optimized by hardware acceleration.
+					</p>
+					<p>
+						The <code>RenderingLimitingModel</code> is not a good implementation, actually. If
+						the UI could be scaled and menus could be managed in a better system, there is no
+						really need to stretch the menus or scroll the entries that hard. So, including
+						<code>ScreenEntry</code> and <code>EntryRenderingUnit</code>, it is more like
+						coding around the problem but not solving the problem, though it is just a badly
+						looking workaround in the system. There should be a better way to do all these
+						things in OpenGL.
+					</p>
+					<p>
+						As for <code>Sprite</code>, there would probably be a high level wrapper of the
+						low level sprite instances. When sprites are loaded into the centralized texture
+						atlas, each sprite corresponds to a pointer with some information locating the
+						entire sprite pixels in the atlas. Then the sprites are saved into the registries.
+						So, <code>Px</code> would also be replaced by the OpenGL functionalities.
+					</p>
+					<p>
+						The <code>SpriteAnimation</code> should really be the animated instances of the
+						sprites with just a pointer with some little extra data. However, it may either
+						be the animated UI components, or the animated texture parts. The sprite
+						architecture should be similar to the specification as in assets pack. Also,
+						the implementation of it internally is too complex, there is no need to align
+						with the time outside, but just a simple tick counter by the ticking function.
+						The borders should not be done here, but in another level. If it is just a
+						simple extended variable instances from a sprite, there is no need for this,
+						all the instances would be recreated, so no "relinking" is needed. However,
+						these may probably just be remade from zero as a better solution.
+					</p>
+					<p>
+						These are probably a lot of messes in the codebase. The <code>SpriteManager</code>
+						should be done by registries. If the skin is directly managed by the account,
+						the in-game management of skins would be a lot simpler, without bothering with
+						the records. The "missing" textures should be done in a higher level class than
+						this. If the texture atlas system is done, there is no need to manage the sheets
+						of all the sprites like this even loaded entire from the assets. The
+						<code>SpriteMeta</code>, probably ignored, to be smashed and remade. The
+						<code>SpriteType</code> logic is quite messy, they should just be registry things.
+						Sprites and <code>SpriteLink</code>, quite complex though, too much. Why would
+						there need to mirror the tiles respectively without mirroring the relative
+						positions of them in a sprite? It is probably just because there is no a
+						well-made filtering mechanism in the rendering system. OpenGL has these
+						functionalities.
+					</p>
+					<p>
+						If ignoring all the subclasses, there are actually just <code>Display</code>,
+						<code>Menu</code>, <code>Toast</code>, <code>TutorialDisplayHandler</code>,
+						<code>RelPos</code> in the package of <code>screen</code> without subpackages.
+						Display is literally monitor display, but not the screens which commonly mean
+						the sets of pictures being shown on the window canvas.
+					</p>
+					<p>
+						Not too much to note on the title screen, but there could really be a background.
+						For all the selectable entries, there could be highlights, but not using the
+						arrows to simplify the appearance. On the title screen, there could be the logo,
+						the menu entries, the version string, the splashes, the background. The splashes
+						would not be hardcoded and conditioned, and thus fully customizable by assets
+						packs. There would not be the need to show the help message on the bottom when
+						mouse is supported, and enabled by default. The version string would be longer
+						to add some more text. Probably the splash text does not splash, so named just
+						"title texts". It is true that if they are made into components like how we do
+						with AWT or Swing, there is no need to recalculate the positions or lengths
+						again and again every frame, and the values would not be out of scope, for
+						code quality it is beneficial. The code in the <code>init</code> function
+						of <code>TitleDisplay</code> is not something should show up for the screen.
+						The "Play" entry would become "Singleplayer" and "Multiplayer" 2
+						entries, then "Settings"; achievements would not be there yet, so the entry
+						would not be added. The simple screen like the 4 entries of the "Help" menu
+						could just be a dialog menu, for simplicity. If the layout involves "clearing"
+						the entire canvas or fully covering all the components in the back, it would be
+						made as a screen, with all the content made as menus and/or components. When it
+						involves a set of entries, the entries should be included within a menu. Then,
+						the entries would be "Help" and "Quit".
+					</p>
+					<p>
+						If achievements become account-based, all the data would come from server instead
+						of application assets. The implementation would probably like the Xbox achievements
+						in Minecraft: Bedrock Edition. Anyway, the code, logic or parts that are not related
+						to the UI should be separated from the classes, like the loading thing or achievement
+						management. The achievement notification could be a lot better, like using toasts.
+					</p>
+					<p>
+						Toast is quite a good idea, but the implementation could still be improved. There
+						are application (system) toasts and gameplay toasts, having similar properties, but
+						they are used in different places. To make them separated, a better way could be
+						putting application notifications in the bottom-right corner like the system
+						notifications and gameplay notifications in the top-right corner. Players could still
+						access the gameplay notification center in the inventory menu screens and the
+						application notification center in the pause menu or any other screen outside game.
+						The content should be formatted text, but somewhere, there could be bold title with
+						details by an external function forming the resultant formatted text. There would not
+						be too frequent for the instances, so the frames could be fully instantiated without
+						using singletons. The constructor could be similar, that parameters are mostly decided
+						by the subclasses with optional extra parameters. The sprite property could also be
+						abstract property instead of constructor parameter with field, such patterns could be
+						generalized as a code style. It accepts nullable for custom rendering, but should only
+						with sprites for simplification. Animations could be supported, but it is another
+						topic. <code>AchievementUnlockToast</code> is not that good usage. Still, there should
+						be a better to handle the content, frame and animations.
+					</p>
+					<p>
+						For the <code>BookDisplay</code>, most probably the previous trial to implement the
+						editable books, but the way to handle text fields could really be better. More details
+						should be discussed later. Books without the title and page count are not books and
+						should never use this class.
+					</p>
+					<p>
+						There would be an abstract class of <code>InventoryScreen</code>. All the menu
+						screens containing the player inventory should extend the class. It includes the
+						player inventory menu, crafting menus, container menus, but not the book screens.
+						All the inventory menus would have the item counter, but different from the item
+						list menu, which should really be used by the creative mode item list. The on-screen
+						keyboard menu would be controlled by an input field instead of the parent menus, it
+						also means flexible dynamic menu addition with certain priority should be supported.
+					</p>
+					<p>
+						For the screens like the <code>ContainerDisplay</code> with 2-sided menus, a better
+						way is to use directional controls without "looping" through menus. However, if they
+						are top-bottom menus, it would be different since they are likely more connected;
+						still, tabs may still be enough. Note that the controls to select slots or move
+						stacks across slots and menus would be available only when mouse is disabled to
+						prevent conflicts with mouse controls, just like selecting tiles by keyboard. There
+						would still be better layouts for these menus to work, but decided later. So,
+						<code>getOtherIdx</code> does not really make sense here. Plus, determining controls
+						by checking which menu the cursor is at, does not at all make this logical sense.
+						It could also bother functionality changes. A standardized way should be supported.
+						It should not be called "heaviness", but a better name or mechanism should be made.
+						That color fading could later be realized by using the alpha channel.
+					</p>
+					<p>
+						It has been noted that the <code>CraftingDisplay</code> would be integrated into
+						<code>PlayerInvDisplay</code>, which would later be renamed to
+						<code>PlayerInventoryScreen</code>. Depending on implementation, there could also
+						be subclasses of <code>SurvivalPlayerInventoryScreen</code> and
+						<code>CreativePlayerInventoryScreen</code> or something, but surely to make the
+						system more logically aligned with the code style. The recipe system would later
+						be decided, so as the related crafting menus and recipe unlocking functionality.
+						The way to get achievements is too hardcoded. The refreshing function is quite
+						odd, but listening to inventory changes could be made if needed.
+					</p>
+					<p>
+						The <code>DebugPanelDisplay</code> is just like the GUI mode of commands. If
+						commands are supported, it could be removed, but could still be there in case
+						if needed. However, maintaining it could be a little complex. A recommendation
+						would be dropping this menu. There are quite many entries derived only used by
+						this menu, so only using the commands in the chat room would be a better way.
+					</p>
+					<p>
+						<code>Display</code> should surely be an abstract class renamed as
+						<code>Screen</code>. However, <code>parent</code> should not be handled here
+						and instead by the manager only. Some several functionalities would be supported
+						to enhance the features used by other menus associated with the menus. There
+						would not be <code>clearScreen</code>, and <code>canExit</code> may be replaced
+						by an overridable function, or probably a screen handle callable by the screen.
+						This class would become like a panel or something. <code>selection</code> of
+						menu would only be useful for keyboard controls, but likely tabbing would do
+						this. For components to be selectable by using arrow keys, they could be aligned
+						using layouts like AWT does or relative positions, like grid layout and border
+						layout. There may not be the need for <code>onSelectionChange</code>, but it
+						may be used if it is used for accessing hidden menus which could also be
+						accessible with mouse hovering, only if it contains only selectable component.
+						This rendering function is no longer applicable, and rendering depth should not
+						depend on selection index.
+					</p>
+					<p>
+						There could still be the <code>HowToPlayDisplay</code> screen. Firstly, the
+						rendering of keys could be enhanced with using images, which are the mapped
+						keys, but not the names of the mappings. All the paragraphs would be put into
+						a single translation entry to simplify this thing, but there may be ignorable
+						odd double line breaks between paragraphs. There would be actually 3 types of
+						controls: Keyboard Only, Mouse &amp; Keyboard, Controller. No fallback, so when
+						any controller is disconnected, keyboard would still not usable, unless it is
+						"Controller &amp; Keyboard", with the pattern that "major-first-minor-second".
+						For every set of controls, there would be a guide, with topics in the subtopics
+						under each setting of control. If there are guides without <i>any</i> control,
+						they should be placed aside the control guides. Usage guidelines for each set
+						of controls could be different, but most of the basic functionalities would
+						still be usable. Control guides should be put into control guides; general
+						gameplay guides should be put into general guides. However, advanced guides
+						would not be placed here, but instead other places, like with a wiki. The
+						layout of this screen may refer to the one in Minecraft: Bedrock Edition.
+					</p>
+					<p>
+						There would not be the <code>InfoDisplay</code>, but there could be statistics
+						in the pause menu. Each player would have their own set of statistics, but not
+						for the server or the world. The world information may not be seen here, but
+						perhaps other places.
+					</p>
+					<p>
+						The <code>InventoryMenu</code> could have the holder, but not limited to entity.
+						The inventory content would be linked or associated to the holder's inventory.
+						Any update made in either place would be reflected to the another. However, the
+						content alignment would not be needed, thus the <code>slot</code>. Each slot in
+						the menu would correspond to a slot of the actual inventory. There would not be
+						the creative inventory handled here as mentioned previously. A listener would be
+						registered to the inventory if they are inventory slots. If they are temporary
+						slots, like in the crafting menu, the listener would be registered in the menu.
+						However, since inventory slots may still be updated without interacting with the
+						menus, the listener related to the inventory would probably be registered directly
+						into the inventories, by the holder or something. Item stack operations could be
+						handled by the item list menu, but well-formed structure to handle both the items
+						in the non-inventories and the stacks in the inventory slots should be both handled.
+						There might be a wrapper handling this, but the detailed implementation should be
+						discussed later. There may not need the <code>refresh</code> function for updating
+						the menu frame. The description menu may be later made as a tooltip or a separate
+						menu aside.
+					</p>
+					<p>
+						Dropping a full stack may be handled by using sneaking modifier with the drop
+						hotkey. So, if the configured key for item dropping contain the keys to sneak,
+						it would be regarded as a conflict. Actually, hotkey configuration could be
+						made as the way that for each mapping, a permitted set of keys which is probably
+						set in a constant, would be passed. Available sets:
+						<list>
+							<li>
+								<b>Typing Keys</b>: letters, numbers, punctuations on the main keypad without
+								any modifiers
+							</li>
+							<li>
+								<b>Control Keys</b>: <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Shift</kbd>,
+								<kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Esc</kbd>, <kbd>Enter</kbd>,
+								<kbd>Backspace</kbd>, <kbd>Pause/Break</kbd>, <kbd>Insert</kbd>,
+								<kbd>Delete</kbd>
+							</li>
+							<li><b>Function Keys</b>: <kbd>F1</kbd> to <kbd>F12</kbd></li>
+							<li>
+								<b>Navigation Keys</b>: <kbd>Home</kbd>, <kbd>End</kbd>,
+								<kbd>Page Up</kbd>, <kbd>Page Down</kbd>
+							</li>
+							<li>
+								<b>Numpad Keys</b>: all the keys on the numpad except <kbd>Num Lock</kbd>
+							</li>
+							<li>
+								<b>Forbidden Keys</b>: the keys usually used system-widely, including
+								lock keys, <kbd>Win</kbd>, <kbd>Context</kbd>, <kbd>Print Screen</kbd>
+							</li>
+						</list>
+						Note that in fact, <kbd>Tab</kbd> could also be a navigation key, but excluded
+						from the set to prevent duplication across sets. Unlisted keys may be ignored.
+						Mapped hotkeys would not be used when input fields are activated in the design,
+						so printed keys could be used, but hardcoded keys like the escape key and enter
+						key may be handled specially, especially in one-line field or with an Input
+						Method Editor (IME). While checking conflicts, hardcoded ones would be taken
+						into account.
+					</p>
+					<p>
+						Each menu may handle the content in a different way. There may not be entries,
+						<code>ListEntry</code>, but components, so there would also not be
+						<code>removeSelectedEntry</code>. However, the implementation might be similar
+						to AWT or Swing. The way to handle stacks in <code>InventoryMenu</code> is not
+						perfect.
+					</p>
+					<p>
+						When <code>ItemListMenu</code> becomes using slots, there would not need the
+						display length thing. Also, there is no longer the need to "cut" or align the
+						entries, so the positioning parameter could be dropped. The way to build the
+						menu would be more flexible as components than using like this way, including
+						the padding.
+					</p>
+					<p>
+						Since the language setting is a part of preferences, they should be within the
+						settings class as an inner class. As aforementioned, the debug locale would be
+						dropped, so sorting could even be simpler. Also, when the GUI could be enhanced,
+						there is no need to highlight the entries, reduce troubles to tint colors, but
+						instead bordering the selection, that the active option could be bold and/or
+						tinted in another obvious and distinguishable color. When the user exits the
+						menu, the selected entry would be the new setting to apply, so there is no the
+						"save" button. The translation disclaimer could be kept, and there is no an
+						option to force Unicode font.
+					</p>
+					<p>
+						The <code>LevelTransitionDisplay</code> would just act as the UI. The process
+						of dimension change would be handled in the manager. There is likely not the
+						definite progress, so seemingly the loading screen would appear a standard
+						background with a message. Also, the "level" which then be dimension may not
+						be loaded in advance, it needs to wait for the loading completed at least for
+						the targeted chunk.
+					</p>
+					<p>
+						The <code>ListItemSelectDisplay</code> could instead be a menu dialog, but
+						this screen is only used by the debug panel, so this screen would not be
+						implemented, including all the entries in <code>screen.entry.commands</code>.
+						Also, if there exist classes only used by another class within the package
+						containing various classes, the classes may better be placed in the class
+						using them, especially when there is a theme.
+					</p>
+					<p>
+						The <code>LoadingDisplay</code> would become <code>WorldLoadingScreen</code>,
+						which is not controllable by the escape key. Since the world is loaded chunk
+						by chunk, the progress would be separated into segments with each corresponding
+						to the state of a chunk. Corrupted chunks and regions would be regenerated with
+						backups of original data made, such chunks are deleted from the loaded chunks.
+						If there is any missing chunk at or around the spawn point, they are created
+						and monitored by <code>WorldCreatingScreen</code>, which would also be used
+						by the <code>WorldCreateScreen</code>. The current implementation of
+						<code>LoadingDisplay</code> is quite messy. Loading would not be handled by
+						the screen but the manager class, so the exceptions would not be caught there,
+						and thus the menu dialog would be launched by the manager. About auto fixing,
+						it would be handled directly in loading schemas, as they would be assumed to
+						be bugs previously reported and resolved. The message popups could instead be
+						application notifications. The progress handling would be quite special.
+					</p>
+					<p>
+						<code>Menu</code> would become more general, as a component container. It
+						would not contain any entry by default. If there is any container-like
+						component managing entries like <code>ListEntry</code>, they would be other
+						cases and handled in another way. Importantly, an abstract menu would basically
+						not have any property like size, position, title, spacing, frame, selectability,
+						rendering and searching, even no content. Better may be making the menu
+						containing a container passed into the constructor as final and protected, with
+						delegations, and menus are managed as a separate system than components. Then,
+						<code>Screen</code> would be the similar case, with a difference that only
+						<code>Screen</code> could contain any <code>Menu</code>, but not class itself.
+						The copy constructor and builder patterns are quite messy here. The searching
+						function would be provided separately when the container needs it, which would
+						be powered by a input field and the searching context, working together to
+						give the filtered result, without that fragile highlighting and meaningless
+						scrolling functions. Searching is performed when <kbd>Enter</kbd> is pressed,
+						but not every time the field is updated, and pressing <kbd>Escape</kbd>
+						deactivates the field without performing searching, <kbd>Enter</kbd> also
+						deactivates the field. Rendering of components and such things would be based
+						on relative positions, so there is no need for the translating functions.
+						There might be "visibility". Some containers may have listeners supported.
+						Scrolling animation really complicates the code. There would be no need to
+						update and remove entries, as well as the builder and <kbd>MenuListEntry</kbd>.
+					</p>
+					<p>
+						Only the top-most screen is interacted. Moreover, if the upper screen intends
+						to cover the lower screen(s), rendering of the lower screens is skipped. The
+						gameplay canvas would also be a screen, so that it could also be managed by
+						the <code>ScreenManager</code>. When the gameplay screen is added, it would
+						be placed as the lowest screen, and all other screens are dropped. Also, when
+						any of the world loading screens are initiated, other screens are also dropped.
+						Components may not take the menu or screen handle when ticking, but menus would
+						always take the screen handle passed to screen ticking. The handles and the
+						functioning would be handled directly in the screens and menus, even locally
+						defined components. Some menus may be with definite frames, but not all.
+						Rendering functions are all present in both menus, screens and components.
+					</p>
+					<p>
+						For the other usages of <code>MessageDisplay</code>, there are only the link
+						error message and resource pack description. The former could be replaced by
+						application notification and the latter could be combined into the main menu
+						layout or replaced by tooltips, so this class could be dropped.
+					</p>
+					<p>
+						For <code>MultiplayerDisplay</code>, there is nothing valuable for reference.
+						However, it is worth noting that logging in should be done by the Launcher,
+						and the client ID, user ID, authorization token and ID are all sent by launching
+						arguments. Some more data would be fetched by the application by these data.
+					</p>
+					<p>
+						The <code>OnScreenKeyboardMenu</code> would be probably using the same name,
+						but there would be a parameter in constructor accepting a input field object.
+						There might also be a menu handle of the screen passed, but it is quite unclear
+						how actually it would be implemented. However, it could also just be "invisible".
+						Invisible menus and components would be skipped from both ticking and rendering.
+						Since there could be a lot of differently sized keys, they could be mapped
+						instead by reference linking made as components. If they are null then there is
+						no accessible key(s) on that direction. Navigation would still be handled by D-Pad.
+						The state of the sticky key could be stored inside the key, which is also
+						referenced by the final property. A grid layout may be used for this. All the
+						states of a key should be stored inside the key object, including whether it is
+						pressed or selected. It would still be completely not controlled by keyboard,
+						but it would be hidden automatically if no controller is detected at any tick.
+						The triggered events by these keys should then be directly handled by the input
+						field instead. Also, there should be an abstract class so that there is no need
+						to use <code>\0</code> for the sticky key, and there could be keys not typing
+						any character but other functions like swapping keys like the numbers and symbols.
+						There would not be using x and y, since they are not needed. No exceptions should
+						be thrown like this, and these should be directly handled on the input field
+						instance and menu. There is no need to check whether it is visible in the ticking
+						function. Rendering could be simpler that sprites could be included in components.
+					</p>
+					<p>
+						There would not be separately <code>OptionsMainMenuDisplay</code> and
+						<code>OptionsWorldDisplay</code>, but just the same <code>SettingsScreen</code>.
+						The options should be no difference between the one from the main menu and the one
+						in game. Each option would store the original value and the current value, and the
+						values are compared to perform saving and notice if any. Further settings menus
+						would be instantiated only when they are accessed. Basically there are 2 kinds of
+						layout: Submenus and Tabs. It would highly depend on how the menus are styled
+						and appeared. Changes are applied only when the menus are exited. In Settings, the
+						buttons that are not single options but with submenus popped up end with ellipsis,
+						if the layout of Submenus is used.
+					</p>
+					<p>
+						There is no teh real need of <code>PagedDisplay</code>. It could really be replaced
+						by using a scroll pane, which is even more easy-to-use than pages, unless they
+						are really books, but not the case. Not much to notice, this class could be dropped.
+					</p>
+					<p>
+						For the <code>PauseDisplay</code>, there would be <code>SingleplayerPauseScreen</code>
+						and <code>MultiplayerPauseScreen</code>. A singleplayer game or the host of a LAN world
+						would use the singleplayer version while a multiplayer game would use the multiplayer
+						version. A client connected to a LAN world is also regarded as multiplayer game. The
+						title of the menu would be "Game Menu". Basically, there would be "Back to Game",
+						"Settings", "Statistics", "Advancements". For singleplayer one, there would be "Open
+						to LAN", "World Options" and "Save and Quit"; for multiplayer, there would be
+						"Disconnect", but more functionalities may be added by plugins or mods. There is an
+						uncertainty that there would be a "Save" or "Backup" option for singleplayer, but a
+						more convenient-to-implement way is only using commands, just a problem that either
+						saving or backup would require a complete suspend of gameplay for synchronized game
+						data being saved well. Saving and backup could be performed only when all the game
+						ticking threads are suspended on the server side, so this should be handled by the
+						server internal part, but not what should be handled by the in-game commands. For
+						dedicated servers, there are server commands, but there are no such things in
+						singleplayer. As for the scope of in-game commands, the topic would be discussed
+						later. The only way to implement is only via the pause menu, so discussed later.
+						The background of the pause screen would be the dimmed gameplay screen, but the
+						gameplay screen would not be interacted, though rendering continues, even clicking
+						mouse on the dimmed screen would not close the menu.
+					</p>
+					<p>
+						The <code>PlayDisplay</code> has already been deprecated. The 2 entries would directly
+						be merged into the title screen as mentioned.
+					</p>
+					<p>
+						For the <code>PlayerDeathDisplay</code>, it would be <code>PlayerDeathScreen</code>
+						with the dimmed gameplay screen, similar to the pause menu. However, the gameplay
+						screen would be frozen to the last frame the player died. The title would be "You
+						Died!" in addition to the death message. When the player died, the entity does not
+						exist in the world, but the player <i>is still in the world</i>, with the status of
+						not being spawned. Therefore, the player could not receive any activity from the
+						world. In that status, the died player could only either respawn or quit while the
+						world is still running. If immediate respawning is enabled, this screen is skipped
+						and the player respawns. The quit button is the same as the one in the pause menu.
+						Player could not open any other menu while on this screen and there would not be any
+						other information shown.
+					</p>
+					<p>
+						Some details of <code>PlayerInvDisplay</code> may have already been mentioned
+						previously. The creative mode item list menus would be accessed in another way,
+						either tabbed or made into other menus aside. For the other parts, it would be
+						as what mentioned. Anyway, the selected slot would be bordered or highlighted,
+						and the selected stack of item would be at the cursor, hovering above the
+						inventory menu(s), with the original slot being empty or as a reference of the
+						source slot. There would not be the help text. Then, it would not be using this
+						way to hide the item list menu.
+					</p>
+					<p>
+						For other usages of <code>PopupDisplay</code>, some of them could be replaced by
+						tooltips or full-canvas options dialogs or screens. Some as submenus would be
+						implemented like simple panes with just a few components added, similar to anonymous
+						classes. The ones with just messages could be replaced by notifications. Some with
+						just simple buttons of options could be made by a class named <code>OptionMenu</code>
+						or something else composited of a display message content and options with name and
+						fallback. There may not be the need to have a confirmation popup on quit. As for the
+						options dialog menu, if it would not exit or change the current screen, it could be
+						full-canvas; otherwise it could be with a menu frame. Full-canvas screens could be
+						with lightly dimmed and blurred original screen or with a background image, along
+						with its components. As for listening key sequences in the settings, a non-full-canvas
+						menu or a banner could be shown to indicate that it is listening key inputs and what
+						keys are currently pressed. The resultant sequence would be at the moment before any
+						key has just been released. For example, the confirmation dialog menu of resetting
+						all key bindings would be framed. The styles or appearance of the frame would be
+						decided later. When there are buttons, it would not rely on hotkeys and this structure
+						could be discarded, even for keyboard-only controls, with just a few simple options.
+						It could also make use of the screen resolution by fitting options horizontally.
+						Even using select entries would be easier to use than listening keys. Note that the
+						options dialog menu would not be exited by <kbd>Esc</kbd>, and the options must be
+						used instead. The on-screen keyboard (OSK) would not be handled specifically here.
+					</p>
+					<p>
+						For <code>QuestsDisplay</code>, the management part could be separated like how
+						advancements should have been done. This kind of quest tree display would be quite
+						complex, so keyboard navigation would be available only on keyboard-only mode; or
+						the mouse should be used to drag. Like mentioned in other mechanisms like OSK keys,
+						the components could be linked. There are various ways to display the node description
+						in the tree layout: the first way is using tooltips; the second way is showing the
+						content in a separate menu with the hovering node, empty if nothing hovered; the third
+						way is to select the node on press and show the content in a separate menu. It would
+						depend on whether there would be features supported here. As for the JSON structure,
+						it would not be important when it would no longer be formatted in this way as sources.
+						Full refreshing functions like <code>refreshDisplayableQuests</code> should only be
+						invoked only when they are loaded or something, but not every time some elements are
+						updated, which should always be done in sync with any related activities. This includes
+						<code>reloadEntries</code>, though the data should not be updated in real-time even if
+						they are changed, instead should be the snapshot at the time accessed for simplicity
+						and also consistency. The <code>Display</code> inner classes are quite complex, but
+						they could just be made as submenus.
+					</p>
+					<p>
+						In the structure of quests, they are organized as series. There is no singleton quests
+						but series of quests. A series includes several quests, which may be unlocked in
+						sequence. When showing the menu list of series, they could be listed on the
+						left-hand-side and put the tree layout on the right-hand-side menu, making use of the
+						screen. If there is description for the series, it would be put on the right-hand-side,
+						on the top or on the bottom, outside te tree. Certainly, while there would be 2 separate
+						systems of quests and advancements, quests would not depend on the system of advancements
+						but the more abstract structure. In abstraction, they are called "Progression Systems".
+						Locked quests would always be hidden to prevent spoiler, but advancements may be hidden
+						depending on the levels. The implementation of <code>SeriesQuestViewerDisplay</code> is
+						really complex, if there is a component supporting drawing graphics in shapes this could
+						be a lot simpler, in addition that the nodes could still be boxes of components. Still,
+						if the components could be shapes, there is even no need for the graphics component,
+						simply placing them in the component pool. Making rows and columns while they are
+						unnecessarily like that would be complex, but making linking like elements in a linked
+						list should be enough. That means there would also not need the map of quest
+						relationships when they could just be put into the quest node component instance. Auto
+						scrolling would be used only for keyboard or controller controls, or mouse dragging would
+						be used instead. If the quest manager is instantiated, there is no need the functions of
+						<code>resetGameQuests</code> or <code>load</code>, and saving would be handled by a world
+						save manager. There are no need separated tabs for unlocked and completed series, but
+						probably a select dropdown for showing all, only unlocked or only completed series, and
+						the display menu on the right would be empty if no series is selected in the tab.
+					</p>
+					<p>
+						A new recipe system would be made. The recipe menu and crafting menus would differ a lot.
+						The most important part is that it would become an inventory menu with the player storage
+						space shown on the screen.
+					</p>
+					<p>
+						There may be different sets of directions or positions, but they should be managed in a
+						standardized way, with their enum classes. For example, there would be sets of 2, 4, 5,
+						8 or 9 directions. <code>RelPos</code> is an example of a set of 9 directions in a
+						rectangle. A border layout would use a set of 5 directions. <code>xIndex</code> and
+						<code>yIndex</code> should rather be computed on demand according to the natures of
+						<code>ordinal</code>. To be value-safe, functions like <code>getPos</code> would be
+						avoided, and <code>getOpposite</code> would use switch-case or when instead. If there
+						must be a value of anchor based on <code>Point</code> and <code>RelPos</code> specified,
+						a dedicated class of <code>Anchor</code> could exist.
+					</p>
+					<p>
+						The <code>RepairBenchDisplay</code> would still be an inventory menu. Actually, if
+						possible, storage slots would be recommended over temporary slots, which are what
+						<code>RepairBenchCarrier</code> is using. This style and approach is quite new to
+						this codebase, but the <code>SlotEntry</code> would not be an entry later, just
+						simply be a slot. Every menus handling stack transfers in their places, it is quite
+						repetitive whilst could be simplified by an improved model in fact. The component
+						of a slot would associate with a backing slot instance. If they are just buttons
+						and slots, disabled buttons and empty slots may still be selected, but just could
+						not be interacted. Storage spaces may have attributes or properties, that could
+						define what kind of slots they are, like crafting inputs, products, and so on. The
+						durability of fishing rod could really be implemented to simplify the situation.
+						The functionalities of slot entries would mostly depend on the natures of the
+						backing slots. The <code>RepairInfo</code> is actually a context generated by the
+						input items. The existence of the carrier is just to draw the scope within the
+						display class. Having a leading space in the string for positioning is somehow
+						problematic, but common in this codebase. The slot labels could actually be
+						replaced by intuitive graphics. The function of <code>onAction</code> is used
+						only once in a specific scope, so it could instead be a lambda. That "checking
+						again" may be turned into assertions since it is intentional. Although stack
+						movement would primarily be specified for the destination, mouse scrolling or
+						L1-R1 switching on a slot may still be supported and act like
+						<code>addToCarrier</code>, probably directly operating on the stack. If they
+						are storage slots, the stacks would not need to be dropped on exit.
+					</p>
+					<p>
+						The resource packs and similar things would no longer rely on the directory
+						structures. There would be several categories of the assets. The only supported
+						version of the packs should only be the one the version of the application was
+						designed for, and the older packs may only be loaded with minimal supports
+						where possible. As for the vanilla assets, if all the assets are configurable,
+						they should be packed as one and either embedded in the binary or as an external
+						asset, but modifications to it is disallowed and thus only loaded once on start.
+						There is no longer the need to traverse the embedded assets. The screen would
+						still be 2 tabs with the left unloaded and the right to load. With a higher
+						resolution, there is really no need to combine them into one list while it could
+						reduce the discoverability of the list. Only the brief description of the packs
+						would be needed, so the screen does not have to be detailed. The watcher would
+						monitor all the packs. When leaving this screen, all the packs are loaded into
+						memory, and the packs would not be locked, so all the packs except vanilla
+						assets would be reloaded even if there is no change while on this screen. For
+						the list entries, if there are new items added to the list, the selected one
+						would be kept selected but shifted, and the selection would be removed if the
+						entry is removed; the list entries would not be said to be selected by the mouse,
+						but for the other controls. The file watcher, would be itself as a utility class,
+						so would not be the inner class of the display class or such. On the other hand,
+						they are locked to ensure it would not be modified during loading. If they are
+						keyboard or controller controls, the packs could only be moved while selected.
+						Then, the list entries are also likely linked. For reading the information of
+						the pack, "soft read" lock would only be needed, the dimensions of the logo
+						would not be limited, but there are always the optimal ones. This stream handling
+						part is actually quite low level. There would also no need for the filter to
+						get the assets content. Depending on the assets, mostly only the embedded assets
+						may use the <code>readStringFromInputStream</code> function, but not a must. The
+						metadata would no longer be a single file, and most content may not use the JSON
+						structures.
+					</p>
+					<p>
+						The steps to load packs on start during initialization would be:
+						<list>
+							<li>Load directory for packs.</li>
+							<li>Match packs with preferences.</li>
+							<li>Select matched packs and ignore others, warnings may be emitted.</li>
+							<li>Hard lock all the packs including vanilla assets.</li>
+							<li>Validate vanilla assets with a checksum, an error may be emitted.</li>
+							<li>Load all the packs in order into the memory.</li>
+							<li>Release all the packs.</li>
+							<li>Finish initialization.</li>
+						</list>
+						Note that the assets for the loading screen would be embedded, but it is possible
+						that there could be a "booting" screen configured after loading.
+					</p>
+					<p>
+						The steps to load packs after saving the pack preferences would be:
+						<list>
+							<li>Unload all the assets except vanilla assets.</li>
+							<li>Select matched packs and hard lock packs, errors may be emitted.</li>
+							<li>If reversible errors are emitted, return to the pack list screen.</li>
+							<li>If any pack is updated during the process, return the screen.</li>
+							<li>Load all the packs in order into the memory.</li>
+							<li>Release all the packs.</li>
+						</list>
+						Obviously, the way to manage the vanilla assets is quite different from custom
+						packs, but the format and specification would still be the same. The part which
+						matters would only be how the pack manager works to align with the standard system.
+					</p>
+					<p>
+						Since it would involve different stages for initialization and configuration, there
+						may not only be the single manager for the packs. Post-construction initialization
+						would not be design-safe, so the stages may be separated into several utility parts
+						for the entire pack management system. Individual packs would be on their own, but
+						the workflows must be safe enough as designed.
+					</p>
+					<p>
+						For pack loading, all the parts would just be handled by a function with the manager.
+						Skins would be handled separately from the assets. If assets loading is handled in the
+						lower level, the processing code may not be here. As for loading packs, the exceptions
+						would only take for a single pack, but the entire loading process would be stopped for
+						strict mode. Also, the compatible mode would skip some unimportant exceptions and allow
+						loading old versions.
+					</p>
+					<p>
+						Since skins would be handled by the account system on the platform, they would not be
+						handled by the application.
+					</p>
+				</content>
+			</section>
+			<section title="Other Assets">
+				<content>
+					All the assets would be reviewed, including the content and structures.
+				</content>
+			</section>
+			<section title="Extra Notes">
+				<content>
+					<p>
+						While doing the low level programming anywhere, even in the Kotlin parts, careful
+						coding is always required. It means, extra attentions are always needed, to ensure
+						the logics make sense without heavily relying on the compiler while the compiler
+						may not give valuable information just by the errors or warnings. This is especially
+						important while porting low level APIs to the higher level places, since it may
+						sometimes be forgotten.
+					</p>
+					<p>
+						When there are some utility classes, the internal code may be somehow lower level,
+						so the above rules apply. Also, the resultant syntax of the usages should be
+						idiomatic in Kotlin or even practical according to the code patterns.
+					</p>
+					<p>
+						The way to handle world events, activities and commands should be carefully studied.
+						It may skip the desired code if not handled properly. It includes teleporting
+						entities across dimensions. The necessary unprocessed events should not be ignored
+						if there exists any.
+					</p>
+					<p>
+						Listeners must be handled well. They are registered when they are set up, but they
+						should be unregistered when the holders of the event listeners are destroyed, or
+						they are no longer used. There should be no "zombie" listeners happening. This
+						could only be ensured by the developers, and the compiler could not validate this.
+						Try-finally may be used if it is inside a try-catch block.
+					</p>
+					<p>
+						In fact, when the constructions of classes are limited, as long as they are still
+						in the scope of context, they should be safe to be public. This covers the cases
+						when particularly some classes are doing their responsibilities in their domains
+						for other parts. This case, if the source data are from the other parts where the
+						creations are already limited and the classes in the domain are using the source
+						data with the publicly exposed classes definitions, the source data are still
+						limited in the scope safely even they are in the other domains as long as they
+						are well-designed.
+					</p>
+					<p>
+						Visibilities of entities should be handled well and logical enough. If there
+						exist some functions or constants that are general, they could be considered
+						being moved out of the class. Also, if some members are designed to be used in
+						a specific scope, they should not be highly visible to prevent breaking mechanisms.
+					</p>
+				</content>
+			</section>
+		</section>
+		<section title="Feature Implementation">
+			<content>
+				<p>
+					There would be a <code>Main.kt</code> file, made for client and server respectively.
+					The file contains the entry point <code>main</code> function, which initializes the
+					application along with the arguments proceeded and major handler(s) launched.
+				</p>
+				<p>
+					Errors, would be popped up with information only when the errors occurred before
+					the completion of rendering initialization or the error is in or out of the scope
+					of the application. For error catching, only documented errors should be included,
+					unless it is in the major catch block or the error handler.
+				</p>
+				<p>
+					The window would be launched very early once very basic elements have been
+					initialized, so that a splash screen without window would not be needed. The window
+					is always centered on launch.
+				</p>
+				<p>
+					For the launching arguments, all the options would be named, with kebab cases starting
+					with double hyphens. Hardware acceleration is enabled by default, but a launching option
+					to disable it would also be available. The fullscreen option is just the toggle to
+					whether to launch the window in fullscreen on start. The window size option would always
+					be used regardless of the option. There would be default dimensions for the case when the
+					window size is not specified.
+				</p>
+				<p>
+					Everything would be logged regardless of the levels, so there would be no extra launching
+					options for logging, debugging or tracing. This includes the debug mode, so there is
+					nothing called the "debug mode". Debugging is always available in the application and
+					could be disabled in some parts. This is because it is easy to create user-created
+					content, debugging should also be easy-to-access. When each class is organized and
+					has only single responsibility, logging target with the qualified class names would
+					then be clear, without the need to specify "title names" of the behavior. Log4j 2
+					would be responsible for the logging utility. A top-level helper function would be
+					added like mentioned in <a href="https://stackoverflow.com/a/34462577">this answer</a>.
+					It is not recommended to add the extension functions due to pollutions.
+				</p>
+				<p>
+					For key inputs, the handler receives the events triggered by GLFW. Text inputs are
+					used <i>only on text inputs</i>; keyboard inputs are always used. The events are
+					queued to the main ticking thread. Every keystroke, has 3 states, just pressed, down
+					and just released, with each a boolean value. A press event turns just pressed true and
+					down true; a release event turns down false, just released true. At each input tick from
+					the beginning, both just pressed and just released states are reset to false. After that,
+					the queued input events are proceeded and the key states are updated correspondingly.
+					Then, other window ticking which may take inputs would proceed. The ticking
+					frequency would be 1.5 times of the maximum FPS. There might be another ticking
+					thread with a constant frequency if needed.
+				</p>
+				<p>
+					Input mapping is another manager than the input handler. It may be configured by
+					preferences, but some are hardcoded. This includes the F3 debug key and some advanced
+					mechanisms related to the <kbd>Shift</kbd>, <kbd>Ctrl</kbd> and <kbd>Alt</kbd> modifiers.
+					In-game inputs are handled by this too. Controllers are also handled in the similar way,
+					and also in the same classes. Also, the fields would be used instead of strings, in
+					which they would be static final fields if in Java. The mapping is just for the logics
+					to use, so there would not be the "string keys" of the keys, but surely a mapping to
+					display strings for displaying only. The mapping would be hardcoded, so a loop would not
+					be used. The final states resulted by the input events are simply just "piped" (logical
+					or), so the usages of the states should be mindful enough. This way, it could ensure
+					that all the inputs are taken into account as much as possible. No sticky key is
+					realized for this.
+				</p>
+				<p>
+					When it is possible to not use string keys, they should be avoided. Instead, constants
+					or enums would be used. It is because any errors caused with the strings could only
+					sometimes be known in runtime, thus there could be potential bugs. It could also
+					cause extra performance overheads in runtime by string parsing.
+				</p>
+				<p>
+					The controller management should be improved by GLFW. So, it is possible to choose
+					the controller to use. It is configurable in settings, but not saved to disk. There
+					would still be the OSK for controller, but the mechanisms could be significantly
+					improved.
+				</p>
+				<p>
+					For key mapping configuration, at the moment of the first key pressed released, all
+					the keys pressed are recorded as the key combination. However, some keys are prohibited
+					for configurations, like the escape, menu and Windows keys. This is enforced for
+					context compatibility. The escape key is also used to cancel key detection. Note that
+					the escape key is hardcoded for menu controls.
+				</p>
+				<p>
+					The audio system would be remade with using OpenAL. Several features would be
+					implemented. And note that no mixing algorithm would be used, only simple additions.
+					This should ensure the quality of audio with consistency. When not in game, there would
+					only be UI sounds and BGM; when in game, other sounds only come from the world. There
+					should be no limitation with in-game sound sources, but seemingly only 2 major sources
+					for non-game elements. Further implementation would be handed in the future asset
+					system.
+				</p>
+				<p>
+					Many menu components are certainly required to be updated. This includes the hot bar
+					and several menu frames. However, this part relates to graphics which would be discussed
+					at the later stage. Rendering system may be mostly implemented ourselves for the best
+					compatibility and usages, but it is still worth finding an existing meshing, modelling or
+					sprite library for backing.
+				</p>
+				<p>
+					Sleeping mechanisms would be updated later. Actually, a compromise way ensuring
+					consistency for both game time speed and continuous game events is to not skip or
+					acceleration the time. However, a problem here is that the nighttime could be too
+					long for some intentions. To solve this, <i>a world of dream</i> could be implemented
+					during sleeping, with each world a single player dimension, that if the player received
+					a large amount of damage or died, the player wakes up immediately from bed. The
+					corresponding biological health system would be made for this. The player would be
+					allowed to sleep at any time, only when the character is tired enough. This way,
+					various consistencies could be attained while the player could still be in the gameplay.
+					Detailed implementation would be discussed later. This could also avoid performance
+					issues that may be caused by speeding up game ticking during the time period.
+				</p>
+				<p>
+					Some utility classes could be made for synchronization. For some places, synchronized
+					maps and collections are needed, but the syntax should be more straightforward, like
+					the <code>Mutex</code> or <code>ReadWriteLock</code> in Rust. A similarly favored class
+					could be made for generic instances holding internally by the constructor with the new
+					instances. This could only be ensured by the developer writing the code, though.
+				</p>
+				<p>
+					For settings, probably a good way is to apply changes only on the menus closed. When
+					in settings, there may be several submenus with the screen. So, while UI elements
+					are created with linkages with the values, they are updated only on close. This way,
+					it could be ensured that the setting effects would not occur too frequently if the user
+					change the values frequently during setting.
+				</p>
+				<p>
+					In the future, there would be some hot keys associated with <kbd>F3</kbd>, which is
+					majorly used for debug screen toggle. It would not be allowed in custom key mapping,
+					but instead hardcoded for all the usages. To align with consistency as a part of code
+					quality, the way to handle both a single <kbd>F3</kbd> keystroke input and a combined
+					input with other keys at the same time, an invisible menu session would be used. The
+					session is activated only when <kbd>F3</kbd> is pressed, and deactivated when a
+					command is sent or the key is released. The session would only handle key inputs and
+					trigger commands when applicable. For most keys, a command would be sent to the target
+					which may be a toggle for debugging; otherwise, when the key is released, a match would
+					be done to check whether it has entered any advanced input session to trigger commands,
+					and the debug screen would eventually be toggled if none.
+				</p>
+				<p>
+					A input masking session could be made for each tick for input state checking for menus.
+					This could be managed by the <code>MenuManager</code>. This way, when the processing
+					menu requires the specific inputs which may be mappings, to be hidden for the queued
+					menus, even fully hidden, it could be done dynamically and on demand. It would also
+					not affect global checking for a physical key outside the menu ticking session, though
+					it might not be necessary or practical.
+				</p>
+				<p>
+					The time enums for each part of a day may not be that regular as quarters, especially
+					when 0 would be set as the midnight or midday. As seasons and seasonal day length may
+					be implemented in the future, there might be definite constants specifying the part of
+					a day. The way Minecraft handles may be taken as reference, although the day time tick
+					does not align with the actual real world time system on which how 0 is defined. Detailed
+					implementation would be discussed and decided later.
+				</p>
+				<p>
+					According to the future plan of implementation of the world system, there would be
+					no the depth indices for each dimension, and there are no levels but dimensions.
+					There is not yet the concept of "level" in the proposed ideas actually.
+				</p>
+				<p>
+					As for client IDs, UUIDs with special tricks would be used. On the server side, all the
+					client IDs are recorded, and associated to account IDs. Account IDs would be unique
+					UUIDs guaranteed by the server database, also used as server player entity IDs (EIDs).
+					These EIDs would be unique within the server, or the world, in which the player EIDs
+					would be appended with an identifier for players, distinguished from other entities.
+					The client IDs would be unique, so it is allowed to launch instances of the Launcher
+					on different client devices at the same time, but not allowed to have 2 client instances
+					connected to the server with the same client ID, or a new client ID would be regenerated.
+					However, no 2 or more clients could be connected to the sane server with the same
+					account. Also, in single player, to be allowed in offline gameplay, the player EID would
+					be the default ID hardcoded in the game, but translated to player EID by the account ID,
+					allowing guest modes without accounts. Although it could be more convenient to implement
+					if guest mode is not implemented that the account player EID is always used in the game,
+					so no worry that server worlds could not be played offline. Of course all these things
+					would assume that no one edited the information in an unideal way.
+				</p>
+				<p>
+					Certainly EIDs are not something really "network", but it is now placed in
+					<code>Network</code>. This would probably be handled as utils or with a dedicated
+					category instead.
+				</p>
+				<p>
+					For "Settings", "Options", "Preferences" and "Configurations", there are the definitions
+					here:
+					<list>
+						<li>
+							<b>Settings</b> refer to the configurations and adjustments available within an
+							application that define how it operates, controlling various features and
+							functionalities.
+						</li>
+						<li>
+							<b>Options</b> refer to the choices or alternatives available within a
+							specific context or feature, often presented as a list or menu of different
+							choices to customize user experience or perform specific actions.
+						</li>
+						<li>
+							<b>Preferences</b> refer to the user's personalized settings that determine
+							how they want the application to behave by saving and selecting their
+							choices.
+						</li>
+						<li>
+							<b>Configurations</b> refer to the arrangement and setup of
+							settings, parameters, and options that define the behavior and structure of
+							an application or system, specifying how different components of a system work
+							together specialized for functionalities.
+						</li>
+					</list>
+					"Settings" is the entire system of menu of all settings or several sets of settings
+					encapsulating various "options", where "preferences" of user settings are saved on
+					disk. "Configurations" would not be used in this context.
+				</p>
+				<p>
+					As for synchronization between clients, the decisions of changes would be made by
+					the server, so if the server decide that the player acts are invalid, they could
+					be ignored or just reversed.
+				</p>
+				<p>
+					There might be 2 modes to fully utilize keyboard to move and select tiles. One way
+					is fully using the moving keys and the selected tile is always the tile in the front;
+					another way is to use a set of movement keys to <i>only move</i> (like WASD) and
+					another set of keys to <i>only select tiles</i> by directions (like arrow keys).
+				</p>
+				<p>
+					The way to handle the toggle of hardware acceleration is still a question. In
+					general there is no need to turn off hardware acceleration, but in rare cases
+					the graphics cards may not be compatible with the software, so they may have to
+					be turned off. However, if it has already malfunctioned when the application has
+					launched, the toggle in application is quite unusable. They should either be
+					configured by launching arguments or handled internally by the application.
+				</p>
+			</content>
+		</section>
+		<section title="Development Roadmap and Direction">
+			<content>
+				<p>
+
+				</p>
+			</content>
+		</section>
+	</body>
+</efp>
